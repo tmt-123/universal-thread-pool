@@ -12,15 +12,46 @@
 - 任务指标及 JSON、Prometheus、OpenTelemetry JSON 导出接口。
 - C 接口，以及按编译标准启用的 C++20 协程和 `std::stop_token` 接口。
 
-项目处于早期开发阶段，接口仍可能调整。C++20 接口、跨平台行为及性能数据将逐步补充验证。
+## 项目结构
 
-当前 MSVC 19.44 构建在 continuation 相关代码中遇到 `std::future` 复制错误，Windows 支持尚未完成验证。现阶段建议使用 Linux GCC 构建。
+```text
+universal-thread-pool/
+├── CMakeLists.txt                     # 构建、测试与安装配置
+├── cmake/
+│   └── universal_thread_poolConfig.cmake.in
+├── include/universal_thread_pool/
+│   ├── thread_pool.hpp                # 统一入口头文件
+│   ├── common.hpp                     # 公共类型、选项、取消令牌与指标
+│   ├── thread_pool_core.hpp           # 线程池接口与任务提交模板
+│   ├── executor.hpp                   # 执行器接口
+│   ├── coroutine.hpp                  # C++20 协程适配
+│   ├── task_group.hpp                 # 任务组与作用域任务管理
+│   ├── task_graph.hpp                 # 任务依赖图
+│   ├── runtime.hpp                    # 多线程池运行时与任务路由
+│   └── c_api.h                        # C 语言接口
+├── src/
+│   ├── common.cpp                     # 公共工具与指标导出
+│   ├── thread_pool.cpp                # 工作线程、队列调度与生命周期管理
+│   ├── executor.cpp                   # 执行器实现
+│   ├── task_group.cpp                 # 任务组实现
+│   ├── task_graph.cpp                 # 依赖解析与任务图执行
+│   ├── runtime.cpp                    # 多线程池运行时实现
+│   └── c_api.cpp                      # C 接口实现
+├── examples/
+│   └── basic.cpp                      # 综合使用示例
+└── tests/
+    └── thread_pool_tests.cpp           # 功能测试
+```
 
-基础版本已在 Linux、GCC 9.4.0、CMake 3.31.6 的 Debug 配置下构建，功能测试连续运行 10 次通过，基础示例运行通过。这些检查不代表已完成压力测试或 C++20 接口验证。
+`thread_pool` 负责工作线程、任务队列和调度，是任务执行的核心。调用方通过 `submit` 获取结果，通过 `detach` 提交无需返回值的任务，也可以通过 `executor` 携带默认优先级提交任务。
+
+`task_group` 将一组任务组织起来，提供统一等待和取消操作；`task_graph` 通过依赖关系组织任务，在前置任务完成后调度后继任务。任务延续与数据流接口用于连接异步结果。
+
+`thread_pool_runtime` 管理 CPU、IO 和后台线程池，按照任务类型路由执行。指标接口用于查看任务计数、队列状态、工作线程状态和延迟分布，`c_api.h` 为 C 调用方提供创建、提交、等待、关闭和指标查询入口。
 
 ## 构建与测试
 
-需要 CMake 3.16 或更新版本，以及支持 C++17 的编译器。
+需要 CMake 3.16 或更新版本，以及支持 C++17 的编译器。以下命令用于 Linux 构建；协程和 `std::stop_token` 接口需要 C++20。
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
@@ -28,10 +59,11 @@ cmake --build build --config Debug --parallel
 ctest --test-dir build -C Debug --output-on-failure
 ```
 
-Visual Studio 等多配置生成器通过 `--config Debug` 选择构建配置。
-当前测试使用 `assert`，部分断言中包含操作调用，请先使用 Debug 运行测试；Release 测试检查机制将在后续批次修复。
+测试使用 Debug 配置运行。构建后执行基础示例：
 
-运行示例：单配置生成器执行 `build/thread_pool_basic`，Visual Studio 执行 `build/Debug/thread_pool_basic.exe`。
+```sh
+./build/thread_pool_basic
+```
 
 ## 最小示例
 
@@ -62,17 +94,4 @@ cmake --install build --config Debug --prefix install
 | 选项 | 默认值 | 用途 |
 | --- | --- | --- |
 | `UNIVERSAL_THREAD_POOL_BUILD_TESTS` | `ON` | 构建测试和示例 |
-| `UNIVERSAL_THREAD_POOL_BUILD_BENCHMARKS` | `OFF` | 构建基准程序（后续批次提供） |
 | `UNIVERSAL_THREAD_POOL_SANITIZER` | 空 | GCC/Clang 下可选 `address` 或 `thread` |
-
-## 目录
-
-- `include/universal_thread_pool/`：公共头文件与模板实现。
-- `src/`：线程池、执行器、运行时、任务图、任务组和 C 接口实现。
-- `examples/`：使用示例。
-- `tests/`：功能测试。
-- `cmake/`：安装包配置。
-
-## 发布计划
-
-基础版本之后依次完善测试与 CI、调度策略示例、任务生命周期示例、组合任务示例、接口与安装验证、基准程序及发布说明。各批次以实际提交为准。
