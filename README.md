@@ -59,7 +59,9 @@ cmake --build build --config Debug --parallel
 ctest --test-dir build -C Debug --output-on-failure
 ```
 
-测试使用 Debug 配置运行。构建后执行基础示例：
+测试使用始终执行的 `CHECK` 检查，支持 Debug 和 Release 配置。使用 `-DCMAKE_BUILD_TYPE=Release` 可构建 Release 版本。CI 分别运行 Debug、Release、Address/UndefinedBehaviorSanitizer 和 ThreadSanitizer 检查。
+
+构建后执行基础示例：
 
 ```sh
 ./build/thread_pool_basic

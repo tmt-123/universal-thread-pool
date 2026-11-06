@@ -104,6 +104,7 @@ enable_testing()
 add_executable(thread_pool_tests tests/thread_pool_tests.cpp)
 target_link_libraries(thread_pool_tests PRIVATE universal_thread_pool)
 add_test(NAME thread_pool_tests COMMAND thread_pool_tests)
+set_tests_properties(thread_pool_tests PROPERTIES TIMEOUT 120)
 
 add_executable(thread_pool_basic examples/basic.cpp)
 target_link_libraries(thread_pool_basic PRIVATE universal_thread_pool)

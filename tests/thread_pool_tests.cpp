@@ -1,4 +1,5 @@
-#include <cassert>
+#include <cstdlib>
+#include <iostream>
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -17,6 +18,16 @@ using namespace std::chrono_literals;
 
 namespace {
 
+void check(bool condition, const char* expression, const char* file, int line) {
+    if (!condition) {
+        std::cerr << file << ':' << line << ": check failed: " << expression << std::endl;
+        std::abort();
+    }
+}
+
+// Unlike assert, CHECK evaluates its expression in Release builds as well.
+#define CHECK(expression) check(static_cast<bool>(expression), #expression, __FILE__, __LINE__)
+
 thread_pool_options base_options(std::size_t threads = 4) {
     thread_pool_options options;
     options.initial_threads = threads;
@@ -25,22 +36,22 @@ thread_pool_options base_options(std::size_t threads = 4) {
 }
 
 void test_submit_and_future() {
-    assert(version_major >= 0);
-    assert(std::string(version_string).size() > 0);
+    CHECK(version_major >= 0);
+    CHECK(std::string(version_string).size() > 0);
 
     thread_pool pool(base_options(2));
 
     auto a = pool.submit([] { return 20; });
     auto b = pool.submit([](int x) { return x + 2; }, 20);
 
-    assert(a.get() == 20);
-    assert(b.get() == 22);
-    assert(pool.wait_for_idle(2s));
+    CHECK(a.get() == 20);
+    CHECK(b.get() == 22);
+    CHECK(pool.wait_for_idle(2s));
 
     const auto metrics = pool.metrics();
-    assert(metrics.submitted_tasks_total == 2);
-    assert(metrics.completed_tasks_total == 2);
-    assert(metrics.failed_tasks_total == 0);
+    CHECK(metrics.submitted_tasks_total == 2);
+    CHECK(metrics.completed_tasks_total == 2);
+    CHECK(metrics.failed_tasks_total == 0);
 }
 
 void test_dispatch_inline_counts_submission() {
@@ -52,17 +63,17 @@ void test_dispatch_inline_counts_submission() {
             ran_inline = true;
         });
 
-        assert(ran_inline);
+        CHECK(ran_inline);
         return ok;
     });
 
-    assert(dispatched.get());
-    assert(pool.wait_for_idle(2s));
+    CHECK(dispatched.get());
+    CHECK(pool.wait_for_idle(2s));
 
     const auto metrics = pool.metrics();
-    assert(metrics.submitted_tasks_total == 2);
-    assert(metrics.completed_tasks_total == 2);
-    assert(metrics.failed_tasks_total == 0);
+    CHECK(metrics.submitted_tasks_total == 2);
+    CHECK(metrics.completed_tasks_total == 2);
+    CHECK(metrics.failed_tasks_total == 0);
 }
 
 void test_detach_and_wait_for_idle() {
@@ -70,13 +81,13 @@ void test_detach_and_wait_for_idle() {
     std::atomic<int> counter{0};
 
     for (int i = 0; i < 1000; ++i) {
-        assert(pool.detach([&counter] {
+        CHECK(pool.detach([&counter] {
             counter.fetch_add(1, std::memory_order_relaxed);
         }));
     }
 
-    assert(pool.wait_for_idle(5s));
-    assert(counter.load(std::memory_order_relaxed) == 1000);
+    CHECK(pool.wait_for_idle(5s));
+    CHECK(counter.load(std::memory_order_relaxed) == 1000);
 }
 
 void test_exception_propagates_from_submit() {
@@ -93,25 +104,25 @@ void test_exception_propagates_from_submit() {
         threw = true;
     }
 
-    assert(threw);
-    assert(pool.wait_for_idle(2s));
+    CHECK(threw);
+    CHECK(pool.wait_for_idle(2s));
 
     const auto metrics = pool.metrics();
-    assert(metrics.completed_tasks_total == 1);
-    assert(metrics.failed_tasks_total == 0);
+    CHECK(metrics.completed_tasks_total == 1);
+    CHECK(metrics.failed_tasks_total == 0);
 }
 
 void test_detached_exception_is_counted() {
     thread_pool pool(base_options(2));
 
-    assert(pool.detach([] {
+    CHECK(pool.detach([] {
         throw std::runtime_error("detached boom");
     }));
 
-    assert(pool.wait_for_idle(2s));
+    CHECK(pool.wait_for_idle(2s));
 
     const auto metrics = pool.metrics();
-    assert(metrics.failed_tasks_total == 1);
+    CHECK(metrics.failed_tasks_total == 1);
 }
 
 void test_pause_and_resume() {
@@ -123,16 +134,16 @@ void test_pause_and_resume() {
     pool.pause();
 
     std::atomic<int> counter{0};
-    assert(pool.detach([&counter] {
+    CHECK(pool.detach([&counter] {
         counter.fetch_add(1, std::memory_order_relaxed);
     }));
 
     std::this_thread::sleep_for(100ms);
-    assert(counter.load(std::memory_order_relaxed) == 0);
+    CHECK(counter.load(std::memory_order_relaxed) == 0);
 
     pool.resume();
-    assert(pool.wait_for_idle(2s));
-    assert(counter.load(std::memory_order_relaxed) == 1);
+    CHECK(pool.wait_for_idle(2s));
+    CHECK(counter.load(std::memory_order_relaxed) == 1);
 }
 
 void test_bounded_reject() {
@@ -143,11 +154,11 @@ void test_bounded_reject() {
     thread_pool pool(options);
     pool.pause();
 
-    assert(pool.detach([] {}));
-    assert(!pool.detach([] {}));
+    CHECK(pool.detach([] {}));
+    CHECK(!pool.detach([] {}));
 
     pool.resume();
-    assert(pool.wait_for_idle(2s));
+    CHECK(pool.wait_for_idle(2s));
 }
 
 void test_try_submit_and_try_detach() {
@@ -161,49 +172,49 @@ void test_try_submit_and_try_detach() {
     auto accepted = pool.try_submit([] {
         return 1;
     });
-    assert(accepted);
+    CHECK(accepted);
 
     auto rejected = pool.try_submit([] {
         return 2;
     });
-    assert(!rejected);
+    CHECK(!rejected);
 
     auto timed_rejected = pool.try_submit_for(1ms, [] {
         return 5;
     });
-    assert(!timed_rejected);
+    CHECK(!timed_rejected);
 
     task_options named;
     named.name = "try-submit-with-options";
     auto rejected_with_options = pool.try_submit_with_options(named, [] {
         return 3;
     });
-    assert(!rejected_with_options);
+    CHECK(!rejected_with_options);
 
     auto timed_options = pool.try_submit_with_options_for(named, 1ms, [] {
         return 6;
     });
-    assert(!timed_options);
+    CHECK(!timed_options);
 
-    assert(!pool.try_detach([] {}));
-    assert(!pool.try_detach_for(1ms, [] {}));
+    CHECK(!pool.try_detach([] {}));
+    CHECK(!pool.try_detach_for(1ms, [] {}));
 
     pool.resume();
-    assert(accepted->get() == 1);
-    assert(pool.wait_for_idle(2s));
+    CHECK(accepted->get() == 1);
+    CHECK(pool.wait_for_idle(2s));
 
     auto executor_future = pool.get_executor().try_submit_for(1s, [] {
         return 4;
     });
-    assert(executor_future);
-    assert(executor_future->get() == 4);
+    CHECK(executor_future);
+    CHECK(executor_future->get() == 4);
 
     std::atomic<int> detached{0};
-    assert(pool.get_executor().try_detach_for(1s, [&detached] {
+    CHECK(pool.get_executor().try_detach_for(1s, [&detached] {
         detached.fetch_add(1, std::memory_order_relaxed);
     }));
-    assert(pool.wait_for_idle(2s));
-    assert(detached.load(std::memory_order_relaxed) == 1);
+    CHECK(pool.wait_for_idle(2s));
+    CHECK(detached.load(std::memory_order_relaxed) == 1);
 }
 
 void test_executor_task_options() {
@@ -233,16 +244,16 @@ void test_executor_task_options() {
     detach_options.name = "executor-detach";
     detach_options.priority = task_priority::critical;
     detach_options.source = UNIVERSAL_THREAD_POOL_SOURCE_LOCATION;
-    assert(ex.detach_with_options(detach_options, [] {}));
+    CHECK(ex.detach_with_options(detach_options, [] {}));
 
-    assert(value.get() == 9);
-    assert(pool.wait_for_idle(2s));
+    CHECK(value.get() == 9);
+    CHECK(pool.wait_for_idle(2s));
 
     std::lock_guard<std::mutex> lock(names_mutex);
-    assert(std::find(names.begin(), names.end(), "executor-submit") != names.end());
-    assert(std::find(names.begin(), names.end(), "executor-detach") != names.end());
-    assert(std::find(priorities.begin(), priorities.end(), task_priority::high) != priorities.end());
-    assert(std::find(priorities.begin(), priorities.end(), task_priority::critical) != priorities.end());
+    CHECK(std::find(names.begin(), names.end(), "executor-submit") != names.end());
+    CHECK(std::find(names.begin(), names.end(), "executor-detach") != names.end());
+    CHECK(std::find(priorities.begin(), priorities.end(), task_priority::high) != priorities.end());
+    CHECK(std::find(priorities.begin(), priorities.end(), task_priority::critical) != priorities.end());
 }
 
 void test_bulk_options_and_executor_bulk() {
@@ -278,28 +289,28 @@ void test_bulk_options_and_executor_bulk() {
     task_options detach_options;
     detach_options.name = "bulk-detach-options";
     detach_options.priority = task_priority::critical;
-    assert(pool.bulk_detach_with_options(detach_options, 3, [&detached](std::size_t) {
+    CHECK(pool.bulk_detach_with_options(detach_options, 3, [&detached](std::size_t) {
         detached.fetch_add(1, std::memory_order_relaxed);
     }) == 3);
 
     task_options executor_detach_options;
     executor_detach_options.name = "executor-bulk-detach-options";
-    assert(ex.bulk_detach_with_options(executor_detach_options, 2, [&detached](std::size_t) {
+    CHECK(ex.bulk_detach_with_options(executor_detach_options, 2, [&detached](std::size_t) {
         detached.fetch_add(1, std::memory_order_relaxed);
     }) == 2);
 
-    assert(futures.back().get() == 9);
-    assert(executor_futures.back().get() == 11);
-    assert(pool.wait_for_idle(2s));
-    assert(detached.load(std::memory_order_relaxed) == 5);
+    CHECK(futures.back().get() == 9);
+    CHECK(executor_futures.back().get() == 11);
+    CHECK(pool.wait_for_idle(2s));
+    CHECK(detached.load(std::memory_order_relaxed) == 5);
 
     std::lock_guard<std::mutex> lock(names_mutex);
-    assert(std::find(names.begin(), names.end(), "bulk-options") != names.end());
-    assert(std::find(names.begin(), names.end(), "executor-bulk-options") != names.end());
-    assert(std::find(names.begin(), names.end(), "bulk-detach-options") != names.end());
-    assert(std::find(priorities.begin(), priorities.end(), task_priority::high) != priorities.end());
-    assert(std::find(priorities.begin(), priorities.end(), task_priority::low) != priorities.end());
-    assert(std::find(priorities.begin(), priorities.end(), task_priority::critical) != priorities.end());
+    CHECK(std::find(names.begin(), names.end(), "bulk-options") != names.end());
+    CHECK(std::find(names.begin(), names.end(), "executor-bulk-options") != names.end());
+    CHECK(std::find(names.begin(), names.end(), "bulk-detach-options") != names.end());
+    CHECK(std::find(priorities.begin(), priorities.end(), task_priority::high) != priorities.end());
+    CHECK(std::find(priorities.begin(), priorities.end(), task_priority::low) != priorities.end());
+    CHECK(std::find(priorities.begin(), priorities.end(), task_priority::critical) != priorities.end());
 }
 
 void test_caller_runs() {
@@ -311,21 +322,21 @@ void test_caller_runs() {
     pool.pause();
 
     std::atomic<int> counter{0};
-    assert(pool.detach([&counter] {
+    CHECK(pool.detach([&counter] {
         counter.fetch_add(1, std::memory_order_relaxed);
     }));
-    assert(pool.detach([&counter] {
+    CHECK(pool.detach([&counter] {
         counter.fetch_add(1, std::memory_order_relaxed);
     }));
 
-    assert(counter.load(std::memory_order_relaxed) == 1);
+    CHECK(counter.load(std::memory_order_relaxed) == 1);
 
     pool.resume();
-    assert(pool.wait_for_idle(2s));
-    assert(counter.load(std::memory_order_relaxed) == 2);
+    CHECK(pool.wait_for_idle(2s));
+    CHECK(counter.load(std::memory_order_relaxed) == 2);
 
     const auto metrics = pool.metrics();
-    assert(metrics.caller_runs_total == 1);
+    CHECK(metrics.caller_runs_total == 1);
 }
 
 void test_priority_order() {
@@ -340,26 +351,26 @@ void test_priority_order() {
     std::vector<int> order;
     std::mutex order_mutex;
 
-    assert(pool.detach_with_priority(task_priority::low, [&] {
+    CHECK(pool.detach_with_priority(task_priority::low, [&] {
         std::lock_guard<std::mutex> lock(order_mutex);
         order.push_back(1);
     }));
-    assert(pool.detach_with_priority(task_priority::critical, [&] {
+    CHECK(pool.detach_with_priority(task_priority::critical, [&] {
         std::lock_guard<std::mutex> lock(order_mutex);
         order.push_back(2);
     }));
-    assert(pool.detach_with_priority(task_priority::normal, [&] {
+    CHECK(pool.detach_with_priority(task_priority::normal, [&] {
         std::lock_guard<std::mutex> lock(order_mutex);
         order.push_back(3);
     }));
 
     pool.resume();
-    assert(pool.wait_for_idle(2s));
+    CHECK(pool.wait_for_idle(2s));
 
-    assert(order.size() == 3);
-    assert(order[0] == 2);
-    assert(order[1] == 3);
-    assert(order[2] == 1);
+    CHECK(order.size() == 3);
+    CHECK(order[0] == 2);
+    CHECK(order[1] == 3);
+    CHECK(order[2] == 1);
 }
 
 void test_priority_fairness_interval() {
@@ -374,44 +385,44 @@ void test_priority_fairness_interval() {
     std::vector<int> order;
     std::mutex order_mutex;
 
-    assert(pool.detach_with_priority(task_priority::low, [&] {
+    CHECK(pool.detach_with_priority(task_priority::low, [&] {
         std::lock_guard<std::mutex> lock(order_mutex);
         order.push_back(1);
     }));
-    assert(pool.detach_with_priority(task_priority::critical, [&] {
+    CHECK(pool.detach_with_priority(task_priority::critical, [&] {
         std::lock_guard<std::mutex> lock(order_mutex);
         order.push_back(2);
     }));
-    assert(pool.detach_with_priority(task_priority::critical, [&] {
+    CHECK(pool.detach_with_priority(task_priority::critical, [&] {
         std::lock_guard<std::mutex> lock(order_mutex);
         order.push_back(3);
     }));
 
     pool.resume();
-    assert(pool.wait_for_idle(2s));
+    CHECK(pool.wait_for_idle(2s));
 
-    assert(order.size() == 3);
-    assert(order[0] == 2);
-    assert(order[1] == 1);
-    assert(order[2] == 3);
-    assert(pool.metrics().priority_fairness_picks_total >= 1);
+    CHECK(order.size() == 3);
+    CHECK(order[0] == 2);
+    CHECK(order[1] == 1);
+    CHECK(order[2] == 3);
+    CHECK(pool.metrics().priority_fairness_picks_total >= 1);
 }
 
 void test_resize_grow_and_shrink() {
     thread_pool pool(base_options(1));
-    assert(pool.thread_count() == 1);
+    CHECK(pool.thread_count() == 1);
 
     pool.resize(3);
     for (int i = 0; i < 50 && pool.thread_count() < 3; ++i) {
         std::this_thread::sleep_for(10ms);
     }
-    assert(pool.thread_count() == 3);
+    CHECK(pool.thread_count() == 3);
 
     pool.resize(1);
     for (int i = 0; i < 100 && pool.thread_count() > 1; ++i) {
         std::this_thread::sleep_for(10ms);
     }
-    assert(pool.thread_count() == 1);
+    CHECK(pool.thread_count() == 1);
 }
 
 void test_resize_shrink_is_idempotent() {
@@ -422,7 +433,7 @@ void test_resize_shrink_is_idempotent() {
     options.worker_batch_size = 1;
 
     thread_pool pool(options);
-    assert(pool.thread_count() == 6);
+    CHECK(pool.thread_count() == 6);
 
     for (int i = 0; i < 8; ++i) {
         pool.resize(2);
@@ -431,13 +442,13 @@ void test_resize_shrink_is_idempotent() {
     for (int i = 0; i < 100 && pool.thread_count() > 2; ++i) {
         std::this_thread::sleep_for(10ms);
     }
-    assert(pool.thread_count() == 2);
+    CHECK(pool.thread_count() == 2);
 
     for (int i = 0; i < 8; ++i) {
         pool.resize(2);
     }
     std::this_thread::sleep_for(50ms);
-    assert(pool.thread_count() == 2);
+    CHECK(pool.thread_count() == 2);
 }
 
 void test_resize_grow_cancels_pending_retirements() {
@@ -452,7 +463,7 @@ void test_resize_grow_cancels_pending_retirements() {
     std::atomic<int> started{0};
 
     for (int i = 0; i < 6; ++i) {
-        assert(pool.detach([&] {
+        CHECK(pool.detach([&] {
             started.fetch_add(1, std::memory_order_relaxed);
             while (!release.load(std::memory_order_acquire)) {
                 std::this_thread::sleep_for(1ms);
@@ -463,18 +474,18 @@ void test_resize_grow_cancels_pending_retirements() {
     for (int i = 0; i < 100 && started.load(std::memory_order_relaxed) < 6; ++i) {
         std::this_thread::sleep_for(10ms);
     }
-    assert(started.load(std::memory_order_relaxed) == 6);
+    CHECK(started.load(std::memory_order_relaxed) == 6);
 
     pool.resize(2);
     pool.resize(6);
 
     release.store(true, std::memory_order_release);
-    assert(pool.wait_for_idle(2s));
+    CHECK(pool.wait_for_idle(2s));
 
     for (int i = 0; i < 100 && pool.thread_count() < 6; ++i) {
         std::this_thread::sleep_for(10ms);
     }
-    assert(pool.thread_count() == 6);
+    CHECK(pool.thread_count() == 6);
 }
 
 void test_parallel_for() {
@@ -488,16 +499,16 @@ void test_parallel_for() {
         values[i] = static_cast<int>(i);
     }, options);
 
-    assert(values[0] == 0);
-    assert(values[999] == 999);
-    assert(std::accumulate(values.begin(), values.end(), 0) == 499500);
+    CHECK(values[0] == 0);
+    CHECK(values[999] == 999);
+    CHECK(std::accumulate(values.begin(), values.end(), 0) == 499500);
 
     std::vector<int> shifted(10, 0);
     pool.parallel_for<int>(5, 15, [&](int i) {
         shifted[static_cast<std::size_t>(i - 5)] = i;
     }, options);
-    assert(shifted.front() == 5);
-    assert(shifted.back() == 14);
+    CHECK(shifted.front() == 5);
+    CHECK(shifted.back() == 14);
 }
 
 void test_parallel_for_each_and_transform() {
@@ -515,10 +526,10 @@ void test_parallel_for_each_and_transform() {
         return value * 3;
     }, options);
 
-    assert(values.front() == 2);
-    assert(values.back() == 2);
-    assert(transformed.front() == 6);
-    assert(transformed.back() == 6);
+    CHECK(values.front() == 2);
+    CHECK(values.back() == 2);
+    CHECK(transformed.front() == 6);
+    CHECK(transformed.back() == 6);
 }
 
 void test_parallel_schedules_and_reduce() {
@@ -542,8 +553,8 @@ void test_parallel_schedules_and_reduce() {
         guided_values[i] = static_cast<int>(i);
     }, guided);
 
-    assert(std::accumulate(dynamic_values.begin(), dynamic_values.end(), 0) == 499500);
-    assert(std::accumulate(guided_values.begin(), guided_values.end(), 0) == 499500);
+    CHECK(std::accumulate(dynamic_values.begin(), dynamic_values.end(), 0) == 499500);
+    CHECK(std::accumulate(guided_values.begin(), guided_values.end(), 0) == 499500);
 
     const auto reduced = pool.parallel_reduce<int>(
         0,
@@ -553,7 +564,7 @@ void test_parallel_schedules_and_reduce() {
             return a + b;
         },
         guided);
-    assert(reduced == 499500);
+    CHECK(reduced == 499500);
 }
 
 void test_parallel_3d_and_nd() {
@@ -564,8 +575,8 @@ void test_parallel_3d_and_nd() {
         grid[static_cast<std::size_t>((x * 3 + y) * 2 + z)] = x + y + z;
     });
 
-    assert(grid.front() == 0);
-    assert(grid.back() == 3 + 2 + 1);
+    CHECK(grid.front() == 0);
+    CHECK(grid.back() == 3 + 2 + 1);
 
     std::atomic<int> count{0};
     pool.parallel_for_nd<int, 4>(
@@ -575,7 +586,7 @@ void test_parallel_3d_and_nd() {
             count.fetch_add(1, std::memory_order_relaxed);
         });
 
-    assert(count.load(std::memory_order_relaxed) == 16);
+    CHECK(count.load(std::memory_order_relaxed) == 16);
 }
 
 void test_cached_pool_growth_and_worker_context() {
@@ -584,7 +595,7 @@ void test_cached_pool_growth_and_worker_context() {
     options.idle_timeout = 50ms;
 
     thread_pool pool(options);
-    assert(pool.thread_count() == 0);
+    CHECK(pool.thread_count() == 0);
 
     std::vector<std::future<bool>> futures;
     for (int i = 0; i < 4; ++i) {
@@ -596,18 +607,18 @@ void test_cached_pool_growth_and_worker_context() {
     }
 
     for (auto& future : futures) {
-        assert(future.get());
+        CHECK(future.get());
     }
 
-    assert(pool.wait_for_idle(2s));
+    CHECK(pool.wait_for_idle(2s));
     for (int i = 0; i < 50 && pool.thread_count() != 0; ++i) {
         std::this_thread::sleep_for(10ms);
     }
-    assert(pool.thread_count() == 0);
+    CHECK(pool.thread_count() == 0);
 
     const auto metrics = pool.metrics();
-    assert(metrics.total_threads == 0);
-    assert(metrics.idle_threads == 0);
+    CHECK(metrics.total_threads == 0);
+    CHECK(metrics.idle_threads == 0);
 }
 
 void test_task_group() {
@@ -621,7 +632,7 @@ void test_task_group() {
     auto maybe_grouped = group.try_submit_for(1s, [] {
         return 7;
     });
-    assert(maybe_grouped);
+    CHECK(maybe_grouped);
     auto token_value = group.submit_with_token(
         [](cancellation_token token, int value) {
             return token.stop_requested() ? -1 : value + 1;
@@ -632,7 +643,7 @@ void test_task_group() {
         [](cancellation_token token) {
             return token.stop_requested() ? -1 : 10;
         });
-    assert(maybe_token_value);
+    CHECK(maybe_token_value);
 
     for (int i = 0; i < 100; ++i) {
         group.run([&counter] {
@@ -646,22 +657,22 @@ void test_task_group() {
     });
 
     group.wait();
-    assert(group.pending() == 0);
-    assert(counter.load(std::memory_order_relaxed) == 101);
-    assert(grouped_value.get() == 42);
-    assert(maybe_grouped->get() == 7);
-    assert(token_value.get() == 9);
-    assert(maybe_token_value->get() == 10);
+    CHECK(group.pending() == 0);
+    CHECK(counter.load(std::memory_order_relaxed) == 101);
+    CHECK(grouped_value.get() == 42);
+    CHECK(maybe_grouped->get() == 7);
+    CHECK(token_value.get() == 9);
+    CHECK(maybe_token_value->get() == 10);
 
     task_group cleanup_group(pool.get_executor());
     cleanup_group.run([] {});
-    assert(pool.wait_for_idle(2s));
-    assert(cleanup_group.clear_ready() == 1);
-    assert(cleanup_group.pending() == 0);
+    CHECK(pool.wait_for_idle(2s));
+    CHECK(cleanup_group.clear_ready() == 1);
+    CHECK(cleanup_group.pending() == 0);
 
     cleanup_group.cancel();
-    assert(cleanup_group.stop_requested());
-    assert(cleanup_group.token().stop_requested());
+    CHECK(cleanup_group.stop_requested());
+    CHECK(cleanup_group.token().stop_requested());
 }
 
 void test_scoped_task_group() {
@@ -677,10 +688,10 @@ void test_scoped_task_group() {
             return token.stop_requested() ? -1 : 11;
         });
         scope.wait();
-        assert(value.get() == 11);
+        CHECK(value.get() == 11);
     }
 
-    assert(counter.load(std::memory_order_relaxed) == 1);
+    CHECK(counter.load(std::memory_order_relaxed) == 1);
 
     {
         scoped_task_group scope(
@@ -696,14 +707,14 @@ void test_scoped_task_group() {
         } catch (const task_cancelled&) {
             wait_threw = true;
         }
-        assert(wait_threw);
+        CHECK(wait_threw);
         bool threw = false;
         try {
             (void)cancelled.get();
         } catch (const task_cancelled&) {
             threw = true;
         }
-        assert(threw);
+        CHECK(threw);
     }
 }
 
@@ -715,12 +726,12 @@ void test_submit_after() {
         return 77;
     });
 
-    assert(future.get() == 77);
+    CHECK(future.get() == 77);
     const auto elapsed = std::chrono::steady_clock::now() - start;
-    assert(elapsed >= 60ms);
+    CHECK(elapsed >= 60ms);
 
     const auto metrics = pool.metrics();
-    assert(metrics.scheduled_tasks_total == 1);
+    CHECK(metrics.scheduled_tasks_total == 1);
 }
 
 void test_schedule_submit_after_and_cancel() {
@@ -729,14 +740,14 @@ void test_schedule_submit_after_and_cancel() {
     auto scheduled = pool.schedule_submit_after(40ms, [] {
         return 78;
     });
-    assert(scheduled);
-    assert(scheduled.future.get() == 78);
+    CHECK(scheduled);
+    CHECK(scheduled.future.get() == 78);
 
     auto cancelled = pool.schedule_submit_after(40ms, [] {
         return 79;
     });
-    assert(cancelled.cancel());
-    assert(cancelled.cancelled());
+    CHECK(cancelled.cancel());
+    CHECK(cancelled.cancelled());
 
     bool threw = false;
     try {
@@ -744,7 +755,7 @@ void test_schedule_submit_after_and_cancel() {
     } catch (const task_cancelled&) {
         threw = true;
     }
-    assert(threw);
+    CHECK(threw);
 
     task_options options;
     options.name = "scheduled-options";
@@ -752,7 +763,7 @@ void test_schedule_submit_after_and_cancel() {
     auto with_options = pool.schedule_submit_after_with_options(options, 1ms, [] {
         return 80;
     });
-    assert(with_options.future.get() == 80);
+    CHECK(with_options.future.get() == 80);
 }
 
 void test_detach_after_and_cancel() {
@@ -762,25 +773,25 @@ void test_detach_after_and_cancel() {
     auto handle = pool.detach_after(40ms, [&counter] {
         counter.fetch_add(1, std::memory_order_relaxed);
     });
-    assert(handle);
+    CHECK(handle);
 
     std::this_thread::sleep_for(120ms);
-    assert(pool.wait_for_idle(2s));
-    assert(counter.load(std::memory_order_relaxed) == 1);
+    CHECK(pool.wait_for_idle(2s));
+    CHECK(counter.load(std::memory_order_relaxed) == 1);
 
     auto cancelled = pool.detach_after(40ms, [&counter] {
         counter.fetch_add(100, std::memory_order_relaxed);
     });
-    assert(cancelled.cancel());
-    assert(cancelled.cancelled());
+    CHECK(cancelled.cancel());
+    CHECK(cancelled.cancelled());
 
     std::this_thread::sleep_for(120ms);
-    assert(pool.wait_for_idle(2s));
-    assert(counter.load(std::memory_order_relaxed) == 1);
+    CHECK(pool.wait_for_idle(2s));
+    CHECK(counter.load(std::memory_order_relaxed) == 1);
 
     const auto metrics = pool.metrics();
-    assert(metrics.scheduled_tasks_total == 2);
-    assert(metrics.scheduled_tasks_cancelled_total >= 1);
+    CHECK(metrics.scheduled_tasks_total == 2);
+    CHECK(metrics.scheduled_tasks_cancelled_total >= 1);
 }
 
 void test_cancellable_tasks() {
@@ -793,7 +804,7 @@ void test_cancellable_tasks() {
     auto future = pool.submit_cancellable(source.token(), [] {
         return 42;
     });
-    assert(pool.detach_cancellable(source.token(), [&counter] {
+    CHECK(pool.detach_cancellable(source.token(), [&counter] {
         counter.fetch_add(1, std::memory_order_relaxed);
     }));
 
@@ -807,12 +818,12 @@ void test_cancellable_tasks() {
         threw = true;
     }
 
-    assert(threw);
-    assert(pool.wait_for_idle(2s));
-    assert(counter.load(std::memory_order_relaxed) == 0);
+    CHECK(threw);
+    CHECK(pool.wait_for_idle(2s));
+    CHECK(counter.load(std::memory_order_relaxed) == 0);
 
     const auto metrics = pool.metrics();
-    assert(metrics.cancelled_tasks_total >= 2);
+    CHECK(metrics.cancelled_tasks_total >= 2);
 }
 
 void test_cancel_pending_sets_task_cancelled() {
@@ -840,11 +851,11 @@ void test_cancel_pending_sets_task_cancelled() {
         threw = true;
     }
 
-    assert(threw);
-    assert(cancelled_hook_count.load(std::memory_order_relaxed) >= 1);
+    CHECK(threw);
+    CHECK(cancelled_hook_count.load(std::memory_order_relaxed) >= 1);
 
     const auto metrics = pool.metrics();
-    assert(metrics.cancelled_tasks_total >= 1);
+    CHECK(metrics.cancelled_tasks_total >= 1);
 }
 
 void test_drop_oldest_sets_task_cancelled() {
@@ -868,11 +879,11 @@ void test_drop_oldest_sets_task_cancelled() {
     } catch (const task_cancelled&) {
         threw = true;
     }
-    assert(threw);
+    CHECK(threw);
 
     pool.resume();
-    assert(kept.get() == 2);
-    assert(pool.wait_for_idle(2s));
+    CHECK(kept.get() == 2);
+    CHECK(pool.wait_for_idle(2s));
 }
 
 void test_deadline_tasks() {
@@ -883,7 +894,7 @@ void test_deadline_tasks() {
     auto future = pool.submit_with_timeout(10ms, [] {
         return 42;
     });
-    assert(pool.detach_with_timeout(10ms, [&counter] {
+    CHECK(pool.detach_with_timeout(10ms, [&counter] {
         counter.fetch_add(1, std::memory_order_relaxed);
     }));
 
@@ -897,12 +908,12 @@ void test_deadline_tasks() {
         threw = true;
     }
 
-    assert(threw);
-    assert(pool.wait_for_idle(2s));
-    assert(counter.load(std::memory_order_relaxed) == 0);
+    CHECK(threw);
+    CHECK(pool.wait_for_idle(2s));
+    CHECK(counter.load(std::memory_order_relaxed) == 0);
 
     const auto metrics = pool.metrics();
-    assert(metrics.cancelled_tasks_total >= 2);
+    CHECK(metrics.cancelled_tasks_total >= 2);
 }
 
 void test_submit_then() {
@@ -914,13 +925,13 @@ void test_submit_then() {
     auto second = pool.submit_then(std::move(first), [](int value) {
         return value + 1;
     });
-    assert(second.get() == 42);
+    CHECK(second.get() == 42);
 
     auto void_first = pool.submit([] {});
     auto after_void = pool.get_executor().submit_then(std::move(void_first), [] {
         return 9;
     });
-    assert(after_void.get() == 9);
+    CHECK(after_void.get() == 9);
 }
 
 void test_submit_then_does_not_occupy_worker_while_waiting() {
@@ -931,12 +942,12 @@ void test_submit_then_does_not_occupy_worker_while_waiting() {
         return value + 1;
     });
 
-    assert(pool.detach([predecessor = std::move(predecessor)]() mutable {
+    CHECK(pool.detach([predecessor = std::move(predecessor)]() mutable {
         predecessor.set_value(41);
     }));
 
-    assert(continued.get() == 42);
-    assert(pool.wait_for_idle(2s));
+    CHECK(continued.get() == 42);
+    CHECK(pool.wait_for_idle(2s));
 }
 
 void test_continue_with_and_dataflow() {
@@ -948,13 +959,13 @@ void test_continue_with_and_dataflow() {
     auto continued = pool.continue_with(std::move(first), [](int value) {
         return value * 2;
     });
-    assert(continued.get() == 42);
+    CHECK(continued.get() == 42);
 
     auto void_first = pool.submit([] {});
     auto after_void = pool.get_executor().continue_with(std::move(void_first), [] {
         return 7;
     });
-    assert(after_void.get() == 7);
+    CHECK(after_void.get() == 7);
 
     std::vector<std::future<int>> inputs;
     for (int i = 1; i <= 4; ++i) {
@@ -966,7 +977,7 @@ void test_continue_with_and_dataflow() {
     auto summed = pool.dataflow(std::move(inputs), [](std::vector<int> values) {
         return std::accumulate(values.begin(), values.end(), 0);
     });
-    assert(summed.get() == 10);
+    CHECK(summed.get() == 10);
 }
 
 void test_continuation_scheduler_and_numa_hooks() {
@@ -996,7 +1007,7 @@ void test_continuation_scheduler_and_numa_hooks() {
     auto continued = pool.continue_with(std::move(base), [](int value) {
         return value + 2;
     });
-    assert(continued.get() == 22);
+    CHECK(continued.get() == 22);
 
     task_options task;
     task.name = "numa-preferred";
@@ -1004,12 +1015,12 @@ void test_continuation_scheduler_and_numa_hooks() {
     auto value = pool.submit_with_options(task, [] {
         return 23;
     });
-    assert(value.get() == 23);
-    assert(pool.wait_for_idle(2s));
+    CHECK(value.get() == 23);
+    CHECK(pool.wait_for_idle(2s));
 
     std::lock_guard<std::mutex> lock(mutex);
-    assert(!affinity_nodes.empty());
-    assert(std::find(task_nodes.begin(), task_nodes.end(), 1) != task_nodes.end());
+    CHECK(!affinity_nodes.empty());
+    CHECK(std::find(task_nodes.begin(), task_nodes.end(), 1) != task_nodes.end());
 }
 
 void test_completion_executor_worker_metrics_and_globals() {
@@ -1025,7 +1036,7 @@ void test_completion_executor_worker_metrics_and_globals() {
         [](int value) {
             return value + 22;
         });
-    assert(continued.get() == 42);
+    CHECK(continued.get() == 42);
 
     std::vector<std::future<int>> inputs;
     inputs.push_back(waiter.submit([] {
@@ -1040,12 +1051,12 @@ void test_completion_executor_worker_metrics_and_globals() {
         [](std::vector<int> values) {
             return std::accumulate(values.begin(), values.end(), 1, std::multiplies<int>());
         });
-    assert(flow.get() == 6);
+    CHECK(flow.get() == 6);
 
     auto global_value = global_thread_pool().submit([] {
         return 5;
     });
-    assert(global_value.get() == 5);
+    CHECK(global_value.get() == 5);
 
     auto runtime_value = global_runtime().continue_on(
         task_kind::blocking_io,
@@ -1056,24 +1067,24 @@ void test_completion_executor_worker_metrics_and_globals() {
         [](int value) {
             return value + 1;
         });
-    assert(runtime_value.get() == 8);
+    CHECK(runtime_value.get() == 8);
 
-    assert(waiter.wait_for_idle(2s));
-    assert(completion.wait_for_idle(2s));
+    CHECK(waiter.wait_for_idle(2s));
+    CHECK(completion.wait_for_idle(2s));
     const auto metrics = completion.metrics();
-    assert(!metrics.workers.empty());
-    assert(metrics.completed_tasks_total >= 2);
-    assert(metrics.average_wait_time_ns() >= 0.0);
-    assert(metrics.average_run_time_ns() >= 0.0);
-    assert(metrics.wait_time_sample_count() >= 2);
-    assert(metrics.run_time_sample_count() >= 2);
-    assert(metrics.wait_time_percentile_estimate_ns(0.95) >= 0.0);
-    assert(metrics.run_time_percentile_estimate_ns(0.95) >= 0.0);
-    assert(metrics.pending_tasks_total() == 0);
+    CHECK(!metrics.workers.empty());
+    CHECK(metrics.completed_tasks_total >= 2);
+    CHECK(metrics.average_wait_time_ns() >= 0.0);
+    CHECK(metrics.average_run_time_ns() >= 0.0);
+    CHECK(metrics.wait_time_sample_count() >= 2);
+    CHECK(metrics.run_time_sample_count() >= 2);
+    CHECK(metrics.wait_time_percentile_estimate_ns(0.95) >= 0.0);
+    CHECK(metrics.run_time_percentile_estimate_ns(0.95) >= 0.0);
+    CHECK(metrics.pending_tasks_total() == 0);
 
     const auto prometheus = to_prometheus(metrics, "completion");
-    assert(prometheus.find("universal_thread_pool_tasks_submitted_total") != std::string::npos);
-    assert(prometheus.find("universal_thread_pool_task_wait_time_ns_bucket") != std::string::npos);
+    CHECK(prometheus.find("universal_thread_pool_tasks_submitted_total") != std::string::npos);
+    CHECK(prometheus.find("universal_thread_pool_task_wait_time_ns_bucket") != std::string::npos);
 }
 
 void test_when_all_values() {
@@ -1089,12 +1100,12 @@ void test_when_all_values() {
     auto all = pool.when_all(std::move(futures));
     const auto values = all.get();
 
-    assert(values.size() == 5);
-    assert(values[0] == 0);
-    assert(values[1] == 1);
-    assert(values[2] == 4);
-    assert(values[3] == 9);
-    assert(values[4] == 16);
+    CHECK(values.size() == 5);
+    CHECK(values[0] == 0);
+    CHECK(values[1] == 1);
+    CHECK(values[2] == 4);
+    CHECK(values[3] == 9);
+    CHECK(values[4] == 16);
 }
 
 void test_when_all_does_not_occupy_worker_while_waiting() {
@@ -1106,17 +1117,17 @@ void test_when_all_does_not_occupy_worker_while_waiting() {
     futures.push_back(second.get_future());
 
     auto all = pool.when_all(std::move(futures));
-    assert(pool.detach(
+    CHECK(pool.detach(
         [first = std::move(first), second = std::move(second)]() mutable {
             first.set_value(20);
             second.set_value(22);
         }));
 
     const auto values = all.get();
-    assert(values.size() == 2);
-    assert(values[0] == 20);
-    assert(values[1] == 22);
-    assert(pool.wait_for_idle(2s));
+    CHECK(values.size() == 2);
+    CHECK(values[0] == 20);
+    CHECK(values[1] == 22);
+    CHECK(pool.wait_for_idle(2s));
 }
 
 void test_when_all_void() {
@@ -1132,7 +1143,7 @@ void test_when_all_void() {
 
     auto all = pool.get_executor().when_all(std::move(futures));
     all.get();
-    assert(counter.load(std::memory_order_relaxed) == 8);
+    CHECK(counter.load(std::memory_order_relaxed) == 8);
 }
 
 void test_when_any_values() {
@@ -1150,8 +1161,8 @@ void test_when_any_values() {
     second.set_value(2);
     const auto result = any.get();
 
-    assert(result.index == 1);
-    assert(result.value == 2);
+    CHECK(result.index == 1);
+    CHECK(result.value == 2);
 }
 
 void test_when_any_does_not_occupy_worker_while_waiting() {
@@ -1161,14 +1172,14 @@ void test_when_any_does_not_occupy_worker_while_waiting() {
     futures.push_back(winner.get_future());
 
     auto any = pool.when_any(std::move(futures));
-    assert(pool.detach([winner = std::move(winner)]() mutable {
+    CHECK(pool.detach([winner = std::move(winner)]() mutable {
         winner.set_value(7);
     }));
 
     const auto result = any.get();
-    assert(result.index == 0);
-    assert(result.value == 7);
-    assert(pool.wait_for_idle(2s));
+    CHECK(result.index == 0);
+    CHECK(result.value == 7);
+    CHECK(pool.wait_for_idle(2s));
 }
 
 void test_when_any_void_and_empty() {
@@ -1189,8 +1200,8 @@ void test_when_any_void_and_empty() {
 
     const auto result = any.get();
 
-    assert(result.index == 1);
-    assert(marker.load(std::memory_order_acquire) == 2);
+    CHECK(result.index == 1);
+    CHECK(marker.load(std::memory_order_acquire) == 2);
 
     bool threw = false;
     try {
@@ -1198,7 +1209,7 @@ void test_when_any_void_and_empty() {
     } catch (const std::invalid_argument&) {
         threw = true;
     }
-    assert(threw);
+    CHECK(threw);
 }
 
 void test_wait_for_idle_ready_work_semantics() {
@@ -1208,8 +1219,8 @@ void test_wait_for_idle_ready_work_semantics() {
         return 1;
     });
 
-    assert(pool.wait_for_idle(20ms));
-    assert(delayed.wait_for(20ms) == std::future_status::timeout);
+    CHECK(pool.wait_for_idle(20ms));
+    CHECK(delayed.wait_for(20ms) == std::future_status::timeout);
 }
 
 void test_work_stealing_local_tasks() {
@@ -1224,7 +1235,7 @@ void test_work_stealing_local_tasks() {
 
     auto root = pool.submit([&] {
         for (int i = 0; i < 200; ++i) {
-            assert(pool.detach([&counter] {
+            CHECK(pool.detach([&counter] {
                 counter.fetch_add(1, std::memory_order_relaxed);
                 std::this_thread::sleep_for(1ms);
             }));
@@ -1234,12 +1245,12 @@ void test_work_stealing_local_tasks() {
     });
 
     root.get();
-    assert(pool.wait_for_idle(5s));
-    assert(counter.load(std::memory_order_relaxed) == 200);
+    CHECK(pool.wait_for_idle(5s));
+    CHECK(counter.load(std::memory_order_relaxed) == 200);
 
     const auto metrics = pool.metrics();
-    assert(metrics.local_tasks_total >= 200);
-    assert(metrics.steal_success_total > 0);
+    CHECK(metrics.local_tasks_total >= 200);
+    CHECK(metrics.steal_success_total > 0);
 }
 
 void test_task_graph_dependencies() {
@@ -1259,12 +1270,12 @@ void test_task_graph_dependencies() {
         b_done.store(true, std::memory_order_release);
     });
     const auto c = graph.emplace([&] {
-        assert(a_done.load(std::memory_order_acquire));
-        assert(b_done.load(std::memory_order_acquire));
+        CHECK(a_done.load(std::memory_order_acquire));
+        CHECK(b_done.load(std::memory_order_acquire));
         c_done.store(true, std::memory_order_release);
     });
     const auto d = graph.emplace([&] {
-        assert(c_done.load(std::memory_order_acquire));
+        CHECK(c_done.load(std::memory_order_acquire));
         d_done.store(true, std::memory_order_release);
     });
 
@@ -1275,10 +1286,10 @@ void test_task_graph_dependencies() {
     auto future = graph.run(pool.get_executor());
     future.get();
 
-    assert(a_done.load(std::memory_order_acquire));
-    assert(b_done.load(std::memory_order_acquire));
-    assert(c_done.load(std::memory_order_acquire));
-    assert(d_done.load(std::memory_order_acquire));
+    CHECK(a_done.load(std::memory_order_acquire));
+    CHECK(b_done.load(std::memory_order_acquire));
+    CHECK(c_done.load(std::memory_order_acquire));
+    CHECK(d_done.load(std::memory_order_acquire));
 }
 
 void test_task_graph_exception() {
@@ -1303,8 +1314,8 @@ void test_task_graph_exception() {
         threw = true;
     }
 
-    assert(threw);
-    assert(!dependent_ran.load(std::memory_order_acquire));
+    CHECK(threw);
+    CHECK(!dependent_ran.load(std::memory_order_acquire));
 }
 
 void test_task_graph_cycle_detection() {
@@ -1323,7 +1334,7 @@ void test_task_graph_cycle_detection() {
         threw = true;
     }
 
-    assert(threw);
+    CHECK(threw);
 }
 
 void test_thread_pool_runtime_routing() {
@@ -1389,41 +1400,41 @@ void test_thread_pool_runtime_routing() {
         return std::accumulate(values.begin(), values.end(), 0);
     });
 
-    assert(runtime.detach_background([&background_counter] {
+    CHECK(runtime.detach_background([&background_counter] {
         background_counter.fetch_add(1, std::memory_order_relaxed);
     }));
 
-    assert(io.get() == 7);
-    assert(latency.get() == 11);
-    assert(bulk.back().get() == 4);
-    assert(routed_bulk.back().get() == 22);
-    assert(continued.get() == 43);
-    assert(runtime_try);
-    assert(runtime_try->get() == 12);
-    assert(runtime_try_for);
-    assert(runtime_try_for->get() == 13);
-    assert(routed_io.get() == 14);
-    assert(routed_background_try);
-    assert(routed_background_try->get() == 15);
-    assert(runtime_scheduled.future.get() == 16);
-    assert(flow.get() == 7);
-    assert(runtime_values.back() == 6);
-    assert(runtime.wait_for_idle_for(2s));
-    assert(runtime.background_pool().wait_for_idle(2s));
-    assert(background_counter.load(std::memory_order_relaxed) == 1);
+    CHECK(io.get() == 7);
+    CHECK(latency.get() == 11);
+    CHECK(bulk.back().get() == 4);
+    CHECK(routed_bulk.back().get() == 22);
+    CHECK(continued.get() == 43);
+    CHECK(runtime_try);
+    CHECK(runtime_try->get() == 12);
+    CHECK(runtime_try_for);
+    CHECK(runtime_try_for->get() == 13);
+    CHECK(routed_io.get() == 14);
+    CHECK(routed_background_try);
+    CHECK(routed_background_try->get() == 15);
+    CHECK(runtime_scheduled.future.get() == 16);
+    CHECK(flow.get() == 7);
+    CHECK(runtime_values.back() == 6);
+    CHECK(runtime.wait_for_idle_for(2s));
+    CHECK(runtime.background_pool().wait_for_idle(2s));
+    CHECK(background_counter.load(std::memory_order_relaxed) == 1);
 
     const auto metrics = runtime.metrics();
-    assert(metrics.cpu.submitted_tasks_total >= 2);
-    assert(metrics.io.submitted_tasks_total >= 1);
-    assert(metrics.background.submitted_tasks_total >= 1);
-    assert(metrics.submitted_tasks_total() >= 4);
-    assert(metrics.total_threads() >= 1);
-    assert(metrics.healthy());
+    CHECK(metrics.cpu.submitted_tasks_total >= 2);
+    CHECK(metrics.io.submitted_tasks_total >= 1);
+    CHECK(metrics.background.submitted_tasks_total >= 1);
+    CHECK(metrics.submitted_tasks_total() >= 4);
+    CHECK(metrics.total_threads() >= 1);
+    CHECK(metrics.healthy());
 
     const auto prometheus = metrics.to_prometheus("runtime_test");
-    assert(prometheus.find("runtime_test_cpu") != std::string::npos);
-    assert(prometheus.find("runtime_test_io") != std::string::npos);
-    assert(prometheus.find("runtime_test_background") != std::string::npos);
+    CHECK(prometheus.find("runtime_test_cpu") != std::string::npos);
+    CHECK(prometheus.find("runtime_test_io") != std::string::npos);
+    CHECK(prometheus.find("runtime_test_background") != std::string::npos);
 }
 
 void test_shutdown_rejects_new_work() {
@@ -1437,8 +1448,8 @@ void test_shutdown_rejects_new_work() {
         threw = true;
     }
 
-    assert(threw);
-    assert(!pool.detach([] {}));
+    CHECK(threw);
+    CHECK(!pool.detach([] {}));
 }
 
 } // namespace

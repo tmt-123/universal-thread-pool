@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: debug
+            build_type: Debug
+            sanitizer: ""
+          - name: release
+            build_type: Release
+            sanitizer: ""
+          - name: asan-ubsan
+            build_type: Debug
+            sanitizer: address
+          - name: tsan
+            build_type: Debug
+            sanitizer: thread
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DUNIVERSAL_THREAD_POOL_BUILD_TESTS=ON
+          -DUNIVERSAL_THREAD_POOL_BUILD_BENCHMARKS=OFF
+          -DUNIVERSAL_THREAD_POOL_SANITIZER="${{ matrix.sanitizer }}"
+
+      - name: Build
+        run: cmake --build build --parallel 2
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
