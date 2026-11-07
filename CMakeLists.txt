@@ -108,6 +108,11 @@ set_tests_properties(thread_pool_tests PROPERTIES TIMEOUT 120)
 
 add_executable(thread_pool_basic examples/basic.cpp)
 target_link_libraries(thread_pool_basic PRIVATE universal_thread_pool)
+
+add_executable(thread_pool_scheduling examples/scheduling.cpp)
+target_link_libraries(thread_pool_scheduling PRIVATE universal_thread_pool)
+add_test(NAME thread_pool_scheduling COMMAND thread_pool_scheduling)
+set_tests_properties(thread_pool_scheduling PROPERTIES TIMEOUT 30)
 endif()
 
 if (UNIVERSAL_THREAD_POOL_BUILD_BENCHMARKS)
