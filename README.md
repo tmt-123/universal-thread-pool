@@ -40,7 +40,8 @@ universal-thread-pool/
 ├── examples/
 │   ├── basic.cpp                      # 综合使用示例
 │   ├── scheduling.cpp                 # 队列策略、优先级与线程管理示例
-│   └── task_lifecycle.cpp             # 取消、延迟、截止时间与关闭示例
+│   ├── task_lifecycle.cpp             # 取消、延迟、截止时间与关闭示例
+│   └── task_composition.cpp           # 任务组、依赖图与跨池数据流示例
 └── tests/
     └── thread_pool_tests.cpp           # 功能测试
 ```
@@ -111,6 +112,25 @@ ctest --test-dir build -C Debug --output-on-failure
 | `stop_immediately` | 取消，工作线程停止获取后续任务 | 不强制中断当前函数 |
 
 所有关闭策略都会拒绝新任务并取消延迟队列中的任务，包括 `drain`。调用 `shutdown(...)` 发起关闭，调用 `join()` 等待线程退出。示例通过单工作线程和 promise 控制任务开始与结束，检查关闭后运行中任务正常返回、队列任务按策略处理，以及后续提交被拒绝。
+
+## 任务组合与运行时路由
+
+```sh
+./build/thread_pool_task_composition
+```
+
+`examples/task_composition.cpp` 展示从独立任务到跨线程池流水线的组织方式，并作为 CTest 用例运行。
+
+| 接口 | 作用 | 示例 |
+| --- | --- | --- |
+| `task_group` | 跟踪一组任务并统一等待 | 并行计算 20 与 22，等待后读取各自 future |
+| `task_graph` | 用 `precede` 表达执行依赖 | 两个输入节点完成后执行合并节点，得到 42 |
+| `continue_on` | 等待前置 future，在指定线程池执行后续函数 | IO 生成输入，CPU 转换，后台池接收结果 |
+| `dataflow_cpu` | 汇集多个 future 的结果并在 CPU 池聚合 | 汇总 1、2、3、4，得到 10 |
+
+`task_graph::run` 返回整张图的完成 future；示例中的节点通过引用访问数据，因此数据与线程池都保持存活直到该 future 完成。`continue_on(waiter_kind, completion_kind, ...)` 分别指定等待前置结果的线程池与执行后续函数的线程池。前置任务抛出的异常通过后续 future 传递，后续函数不执行。
+
+运行时示例分别为 CPU、IO、后台池配置 2、1、1 个工作线程，并在任务内部检查实际执行的线程池。流水线只传递整数，不进行真实磁盘读写；可以将各阶段替换为加载、计算和保存逻辑。
 
 ## 最小示例
 
