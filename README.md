@@ -132,6 +132,18 @@ ctest --test-dir build -C Debug --output-on-failure
 
 运行时示例分别为 CPU、IO、后台池配置 2、1、1 个工作线程，并在任务内部检查实际执行的线程池。流水线只传递整数，不进行真实磁盘读写；可以将各阶段替换为加载、计算和保存逻辑。
 
+## 观察任务派发与执行
+
+`examples/dispatch_trace.cpp` 打印任务提交、入队、开始执行、完成、结果读取以及工作线程退出的过程，日志包含相对时间、任务名、工作线程编号和系统线程 ID。
+
+```sh
+./build/thread_pool_dispatch_trace 1 fifo
+./build/thread_pool_dispatch_trace 2 fifo
+./build/thread_pool_dispatch_trace 1 priority
+```
+
+三个命令分别展示单线程顺序执行、双线程并发和优先级调度。示例先暂停取任务，提交六个任务后再恢复，每个任务休眠 250 毫秒模拟耗时。观察 `START` 判断执行顺序；`RESULT` 是主线程读取 future 的顺序，不代表调度顺序。
+
 ## 最小示例
 
 ```cpp
@@ -156,9 +168,26 @@ cmake --install build --config Debug --prefix install
 
 安装后的消费项目通过 `find_package(universal_thread_pool CONFIG REQUIRED)` 查找库，并将安装目录加入 `CMAKE_PREFIX_PATH`。
 
+独立消费示例位于 `examples/installed/`：
+
+```sh
+cmake -S examples/installed -B build-consumer -DCMAKE_PREFIX_PATH="$PWD/install"
+cmake --build build-consumer --parallel 2
+ctest --test-dir build-consumer --output-on-failure
+```
+
+`tests/c_api_tests.c` 使用 C 编译器构建，检查 C 接口任务提交、等待、指标查询、JSON 导出和关闭行为。C++20 编译器可额外启用协程和停止令牌测试：
+
+```sh
+cmake -S . -B build-cpp20 -DCMAKE_CXX_STANDARD=20 -DUNIVERSAL_THREAD_POOL_BUILD_CPP20_TESTS=ON
+cmake --build build-cpp20 --parallel 4
+ctest --test-dir build-cpp20 --output-on-failure
+```
+
 ## 构建选项
 
 | 选项 | 默认值 | 用途 |
 | --- | --- | --- |
 | `UNIVERSAL_THREAD_POOL_BUILD_TESTS` | `ON` | 构建测试和示例 |
+| `UNIVERSAL_THREAD_POOL_BUILD_CPP20_TESTS` | `OFF` | 构建协程和停止令牌测试，配合 C++20 标准使用 |
 | `UNIVERSAL_THREAD_POOL_SANITIZER` | 空 | GCC/Clang 下可选 `address` 或 `thread` |

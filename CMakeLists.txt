@@ -97,9 +97,24 @@ install(EXPORT universal_thread_poolTargets
 
 option(UNIVERSAL_THREAD_POOL_BUILD_TESTS "Build universal_thread_pool tests and examples" ON)
 option(UNIVERSAL_THREAD_POOL_BUILD_BENCHMARKS "Build universal_thread_pool benchmark harness" OFF)
+option(UNIVERSAL_THREAD_POOL_BUILD_CPP20_TESTS "Build C++20 interface tests (requires CMAKE_CXX_STANDARD=20)" OFF)
 
 if (UNIVERSAL_THREAD_POOL_BUILD_TESTS)
 enable_testing()
+enable_language(C)
+add_executable(thread_pool_c_api_tests tests/c_api_tests.c)
+set_target_properties(thread_pool_c_api_tests PROPERTIES LINKER_LANGUAGE CXX)
+target_link_libraries(thread_pool_c_api_tests PRIVATE universal_thread_pool)
+add_test(NAME thread_pool_c_api_tests COMMAND thread_pool_c_api_tests)
+set_tests_properties(thread_pool_c_api_tests PROPERTIES TIMEOUT 30)
+
+if (UNIVERSAL_THREAD_POOL_BUILD_CPP20_TESTS)
+    add_executable(thread_pool_cpp20_tests tests/cpp20_tests.cpp)
+    target_compile_features(thread_pool_cpp20_tests PRIVATE cxx_std_20)
+    target_link_libraries(thread_pool_cpp20_tests PRIVATE universal_thread_pool)
+    add_test(NAME thread_pool_cpp20_tests COMMAND thread_pool_cpp20_tests)
+    set_tests_properties(thread_pool_cpp20_tests PROPERTIES TIMEOUT 30)
+endif()
 
 add_executable(thread_pool_tests tests/thread_pool_tests.cpp)
 target_link_libraries(thread_pool_tests PRIVATE universal_thread_pool)
@@ -108,6 +123,9 @@ set_tests_properties(thread_pool_tests PROPERTIES TIMEOUT 120)
 
 add_executable(thread_pool_basic examples/basic.cpp)
 target_link_libraries(thread_pool_basic PRIVATE universal_thread_pool)
+
+add_executable(thread_pool_dispatch_trace examples/dispatch_trace.cpp)
+target_link_libraries(thread_pool_dispatch_trace PRIVATE universal_thread_pool)
 
 add_executable(thread_pool_scheduling examples/scheduling.cpp)
 target_link_libraries(thread_pool_scheduling PRIVATE universal_thread_pool)

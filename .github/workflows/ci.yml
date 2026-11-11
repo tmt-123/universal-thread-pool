@@ -45,3 +45,28 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+  interfaces:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        build_type: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure C++20
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_CXX_STANDARD=20 -DUNIVERSAL_THREAD_POOL_BUILD_CPP20_TESTS=ON
+      - name: Build
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel 2
+      - name: Test C and C++ interfaces
+        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure
+      - name: Install
+        run: cmake --install build --config ${{ matrix.build_type }} --prefix "${{ github.workspace }}/install"
+      - name: Configure installed consumer
+        run: cmake -S examples/installed -B build-consumer -DCMAKE_PREFIX_PATH="${{ github.workspace }}/install"
+      - name: Build installed consumer
+        run: cmake --build build-consumer --config ${{ matrix.build_type }} --parallel 2
+      - name: Test installed consumer
+        run: ctest --test-dir build-consumer -C ${{ matrix.build_type }} --output-on-failure

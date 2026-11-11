@@ -2151,9 +2151,11 @@ private:
     template <class F>
     void start_continuation_waiter(F&& waiter) {
         auto task = std::packaged_task<void()>(
-            [waiter_task = std::forward<F>(waiter)]() mutable {
+            // Explicit move-only ownership avoids copy probing of closures that
+            // hold vector<future<T>> in packaged_task implementations.
+            [waiter_task = std::make_unique<std::decay_t<F>>(std::forward<F>(waiter))]() mutable {
                 try {
-                    waiter_task();
+                    (*waiter_task)();
                 } catch (...) {
                 }
             });
