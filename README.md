@@ -184,10 +184,21 @@ cmake --build build-cpp20 --parallel 4
 ctest --test-dir build-cpp20 --output-on-failure
 ```
 
+## 性能基准
+
+```sh
+cmake -S . -B build-bench -DCMAKE_BUILD_TYPE=Release -DUNIVERSAL_THREAD_POOL_BUILD_BENCHMARKS=ON
+cmake --build build-bench --parallel 4
+./build-bench/thread_pool_bench 1000 4 3
+```
+
+三个参数依次为任务数、线程池工作线程数、重复次数。程序对普通提交、批量提交、并行循环和 `std::async` 使用相同数量的元素，输出每轮总耗时、每元素平均耗时和校验和。测量方法与环境记录见 [benchmarks/README.md](benchmarks/README.md)，版本说明见 [CHANGELOG.md](CHANGELOG.md)。
+
 ## 构建选项
 
 | 选项 | 默认值 | 用途 |
 | --- | --- | --- |
 | `UNIVERSAL_THREAD_POOL_BUILD_TESTS` | `ON` | 构建测试和示例 |
+| `UNIVERSAL_THREAD_POOL_BUILD_BENCHMARKS` | `OFF` | 构建性能基准程序 |
 | `UNIVERSAL_THREAD_POOL_BUILD_CPP20_TESTS` | `OFF` | 构建协程和停止令牌测试，配合 C++20 标准使用 |
 | `UNIVERSAL_THREAD_POOL_SANITIZER` | 空 | GCC/Clang 下可选 `address` 或 `thread` |

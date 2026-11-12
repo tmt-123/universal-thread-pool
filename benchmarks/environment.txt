@@ -1,0 +1,13 @@
+Run date: 2026-11-12 (Asia/Shanghai)
+OS: Linux 5.15.0-139-generic x86_64 GNU/Linux
+CPU: Intel Xeon Silver 4310 @ 2.10GHz
+Topology: 48 logical CPUs, 2 sockets, 12 cores/socket, 2 threads/core
+Compiler: g++ 9.4.0 (Ubuntu 9.4.0-1ubuntu1~20.04.2)
+CMake: 3.31.6
+Build type: Release, C++17, default CMake Release flags
+Library base: 9544e8e plus benchmark source in this batch
+Command: ./build-bench/thread_pool_bench 1000 4 3
+Workload: return i+1 / fill array, then checksum
+Pool: 4 workers, batch size 8, metrics enabled, one empty warmup task
+Machine load: shared server, no exclusive CPU allocation or load control
+Raw output: sample-results.csv
