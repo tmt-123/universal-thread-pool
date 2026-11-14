@@ -373,6 +373,31 @@ void test_priority_order() {
     CHECK(order[2] == 1);
 }
 
+void test_fifo_preserves_order_with_priority_metadata() {
+    auto options = base_options(1);
+    options.worker_batch_size = 1;
+    options.scheduler = schedule_policy::fifo;
+    options.enable_priority = false;
+    thread_pool pool(options);
+    pool.pause();
+    std::vector<int> order;
+    const task_priority priorities[] = {
+        task_priority::low, task_priority::high, task_priority::normal,
+        task_priority::critical};
+    for (int i = 0; i < 4; ++i) {
+        CHECK(pool.detach_with_priority(priorities[i], [&, i] { order.push_back(i); }));
+    }
+    auto bulk = pool.bulk_submit_with_priority(task_priority::high, 2, [&](std::size_t i) {
+        order.push_back(static_cast<int>(i + 4));
+        return i;
+    });
+    pool.resume();
+    CHECK(pool.wait_for_idle(2s));
+    CHECK(order == std::vector<int>({0, 1, 2, 3, 4, 5}));
+    CHECK(bulk[0].get() == 0);
+    CHECK(bulk[1].get() == 1);
+}
+
 void test_priority_fairness_interval() {
     thread_pool_options options = base_options(1);
     options.scheduler = schedule_policy::priority;
@@ -1467,6 +1492,7 @@ int main() {
     test_bulk_options_and_executor_bulk();
     test_caller_runs();
     test_priority_order();
+    test_fifo_preserves_order_with_priority_metadata();
     test_priority_fairness_interval();
     test_resize_grow_and_shrink();
     test_resize_shrink_is_idempotent();

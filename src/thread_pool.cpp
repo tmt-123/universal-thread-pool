@@ -769,7 +769,10 @@ std::size_t thread_pool::enqueue_many_impl(
 }
 
 void thread_pool::push_task_locked(task_item item) {
-    const auto bucket = priority_bucket(item.priority);
+    // Without priority scheduling, all global tasks share one FIFO queue.
+    // Keep the original priority in the task and its metadata for observers.
+    const auto bucket = priority_bucket(
+        options_.enable_priority ? item.priority : task_priority::normal);
     queues_[bucket].push_back(std::move(item));
     ++queued_size_;
     record_queue_size_locked();
