@@ -51,7 +51,15 @@ std::string json_escape(const std::string& value) {
             escaped += "\\t";
             break;
         default:
-            escaped += ch;
+            if (static_cast<unsigned char>(ch) < 0x20) {
+                constexpr char hex[] = "0123456789abcdef";
+                const auto value = static_cast<unsigned char>(ch);
+                escaped += "\\u00";
+                escaped += hex[value >> 4];
+                escaped += hex[value & 0x0f];
+            } else {
+                escaped += ch;
+            }
             break;
         }
     }

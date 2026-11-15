@@ -1479,7 +1479,33 @@ void test_shutdown_rejects_new_work() {
 
 } // namespace
 
+void test_metric_names_escape_all_json_control_characters() {
+    std::string name;
+    for (int value = 0; value < 32; ++value) {
+        name.push_back(static_cast<char>(value));
+    }
+    name += "\"\\/";
+    name += "\xe7\xba\xbf\xe7\xa8\x8b\xe6\xb1\xa0"; // UTF-8 pool name
+    const std::string escaped =
+        "\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007"
+        "\\u0008\\t\\n\\u000b\\u000c\\r\\u000e\\u000f"
+        "\\u0010\\u0011\\u0012\\u0013\\u0014\\u0015\\u0016\\u0017"
+        "\\u0018\\u0019\\u001a\\u001b\\u001c\\u001d\\u001e\\u001f"
+        "\\\"\\\\/\xe7\xba\xbf\xe7\xa8\x8b\xe6\xb1\xa0";
+    thread_pool_metrics metrics;
+    const auto json = to_json(metrics, name);
+    const auto otel = to_opentelemetry_json(metrics, name);
+    CHECK(json.find("\"pool\":\"" + escaped + "\"") != std::string::npos);
+    CHECK(otel.find("\"stringValue\":\"" + escaped + "\"") != std::string::npos);
+    for (const auto& document : {json, otel}) {
+        for (unsigned char ch : document) {
+            CHECK(ch >= 0x20);
+        }
+    }
+}
+
 int main() {
+    test_metric_names_escape_all_json_control_characters();
     test_submit_and_future();
     test_dispatch_inline_counts_submission();
     test_detach_and_wait_for_idle();
