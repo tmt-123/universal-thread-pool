@@ -69,7 +69,7 @@ struct runtime_metrics {
     }
 
     std::string to_json(const std::string& runtime_name = "thread_pool_runtime") const {
-        return std::string("{\"runtime\":\"") + runtime_name + "\",\"cpu\":" +
+        return std::string("{\"runtime\":\"") + detail::json_escape(runtime_name) + "\",\"cpu\":" +
             universal_thread_pool::to_json(cpu, runtime_name + "_cpu") +
             ",\"io\":" +
             universal_thread_pool::to_json(io, runtime_name + "_io") +
@@ -80,7 +80,7 @@ struct runtime_metrics {
 
     std::string to_opentelemetry_json(
         const std::string& runtime_name = "thread_pool_runtime") const {
-        return std::string("{\"runtime\":\"") + runtime_name + "\",\"pools\":[" +
+        return std::string("{\"runtime\":\"") + detail::json_escape(runtime_name) + "\",\"pools\":[" +
             universal_thread_pool::to_opentelemetry_json(cpu, runtime_name + "_cpu") +
             "," +
             universal_thread_pool::to_opentelemetry_json(io, runtime_name + "_io") +

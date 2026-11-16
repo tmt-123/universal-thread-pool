@@ -1504,7 +1504,53 @@ void test_metric_names_escape_all_json_control_characters() {
     }
 }
 
+void check_json_delimiters(const std::string& document) {
+    std::vector<char> stack;
+    bool in_string = false;
+    bool escaped = false;
+    for (char ch : document) {
+        if (in_string) {
+            if (escaped) escaped = false;
+            else if (ch == '\\') escaped = true;
+            else if (ch == '"') in_string = false;
+        } else if (ch == '"') {
+            in_string = true;
+        } else if (ch == '{' || ch == '[') {
+            stack.push_back(ch);
+        } else if (ch == '}' || ch == ']') {
+            CHECK(!stack.empty());
+            CHECK(stack.back() == (ch == '}' ? '{' : '['));
+            stack.pop_back();
+        }
+    }
+    CHECK(!in_string && stack.empty());
+}
+
+void test_runtime_metric_names_escape_json() {
+    const std::string name = std::string("runtime\"\\\n\t\r\b\f") + '\0' + "\xe7\xba\xbf";
+    const std::string escaped = "runtime\\\"\\\\\\n\\t\\r\\u0008\\u000c\\u0000\xe7\xba\xbf";
+    runtime_metrics metrics;
+    const auto json = metrics.to_json(name);
+    const auto otel = metrics.to_opentelemetry_json(name);
+    const std::string prefix = "{\"runtime\":\"" + escaped + "\",";
+    CHECK(json.compare(0, prefix.size(), prefix) == 0);
+    CHECK(otel.compare(0, prefix.size(), prefix) == 0);
+    CHECK(json.find("\"cpu\":" + to_json(metrics.cpu, name + "_cpu")) != std::string::npos);
+    CHECK(json.find("\"io\":" + to_json(metrics.io, name + "_io")) != std::string::npos);
+    CHECK(json.find("\"background\":" + to_json(metrics.background, name + "_background")) != std::string::npos);
+    for (const std::string suffix : {"_cpu", "_io", "_background"}) {
+        CHECK(otel.find("\"stringValue\":\"" + escaped + suffix + "\"") != std::string::npos);
+    }
+    for (const auto& document : {json, otel}) {
+        check_json_delimiters(document);
+        for (unsigned char ch : document) CHECK(ch >= 0x20);
+    }
+    CHECK(metrics.to_json("").find("{\"runtime\":\"\",") == 0);
+    CHECK(metrics.to_opentelemetry_json().find("{\"runtime\":\"thread_pool_runtime\",") == 0);
+}
+
 int main() {
+    test_runtime_metric_names_escape_json();
     test_metric_names_escape_all_json_control_characters();
     test_submit_and_future();
     test_dispatch_inline_counts_submission();

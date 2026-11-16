@@ -30,6 +30,10 @@ std::string prometheus_escape_label_value(const std::string& value) {
     return escaped;
 }
 
+} // namespace
+
+namespace detail {
+
 std::string json_escape(const std::string& value) {
     std::string escaped;
     escaped.reserve(value.size());
@@ -65,6 +69,10 @@ std::string json_escape(const std::string& value) {
     }
     return escaped;
 }
+
+} // namespace detail
+
+namespace {
 
 std::string latency_bucket_label(std::size_t index) {
     if (index >= metric_latency_bucket_upper_bounds_ns.size()) {
@@ -224,7 +232,7 @@ std::string to_prometheus(const thread_pool_metrics& metrics, const std::string&
 std::string to_json(const thread_pool_metrics& metrics, const std::string& pool_name) {
     std::ostringstream out;
     out << "{";
-    out << "\"pool\":\"" << json_escape(pool_name) << "\",";
+    out << "\"pool\":\"" << detail::json_escape(pool_name) << "\",";
     out << "\"submitted_tasks_total\":" << metrics.submitted_tasks_total << ",";
     out << "\"completed_tasks_total\":" << metrics.completed_tasks_total << ",";
     out << "\"failed_tasks_total\":" << metrics.failed_tasks_total << ",";
@@ -283,7 +291,7 @@ std::string to_json(const thread_pool_metrics& metrics, const std::string& pool_
 std::string to_opentelemetry_json(
     const thread_pool_metrics& metrics,
     const std::string& pool_name) {
-    const auto escaped_pool = json_escape(pool_name);
+    const auto escaped_pool = detail::json_escape(pool_name);
     struct metric_value {
         const char* name;
         std::uint64_t value;
@@ -313,7 +321,7 @@ std::string to_opentelemetry_json(
             << "\",\"sum\":{\"dataPoints\":[{\"asInt\":\""
             << values[i].value << "\"}]}}";
     }
-    out << "]}]}]}]}";
+    out << "]}]}]}";
     return out.str();
 }
 

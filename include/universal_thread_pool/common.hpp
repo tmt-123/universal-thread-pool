@@ -101,6 +101,8 @@ double estimate_latency_percentile_ns(
 
 namespace detail {
 
+std::string json_escape(const std::string& value);
+
 template <class T, class F, bool IsVoid = std::is_void<T>::value>
 struct continuation_result;
 
