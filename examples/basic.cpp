@@ -10,7 +10,7 @@
 int main() {
     using namespace universal_thread_pool;
 
-    std::cout << "Universal Thread Pool " << version_string << '\n';
+    std::cout << "通用线程池 版本：" << version_string << '\n';
 
     thread_pool_options options;
     options.name = "example_pool";
@@ -25,7 +25,7 @@ int main() {
     options.max_queue_size = 1024;
     options.on_task_start = [](const task_metadata& task) {
         if (!task.name.empty()) {
-            std::cout << "starting task #" << task.id << " " << task.name << '\n';
+            std::cout << "开始执行任务 编号=" << task.id << " " << task.name << '\n';
         }
     };
 
@@ -155,7 +155,7 @@ int main() {
     scoped_task_group scoped(pool.get_executor(), scoped_task_group_policy::cancel_and_wait);
     scoped.run_with_token([](cancellation_token token) {
         if (!token.stop_requested()) {
-            std::cout << "scoped task ran\n";
+            std::cout << "作用域任务已执行\n";
         }
     });
     scoped.wait();
@@ -230,41 +230,41 @@ int main() {
     const auto prometheus = to_prometheus(metrics, "example_pool");
     const auto runtime_idle = runtime.wait_for_idle_for(std::chrono::seconds(1));
 
-    std::cout << "future=" << future.get()
-              << " named=" << named_future.get()
-              << " executor_named=" << executor_named_future.get()
-              << " try=" << (try_future ? try_future->get() : -1)
-              << " try_for=" << (try_for_future ? try_for_future->get() : -1)
-              << " scheduled=" << scheduled_future.future.get()
-              << " sum=" << sum
-              << " reduced=" << reduced
-              << " bulk_last=" << bulk.back().get()
-              << " option_bulk_last=" << option_bulk.back().get()
-              << " continued=" << continued.get()
-              << " cross_continued=" << cross_pool_continued.get()
-              << " flow=" << flow.get()
-              << " cross_flow=" << cross_pool_flow.get()
-              << " group=" << group_value.get()
-              << " group_token=" << cancellable_group_value.get()
-              << " grid_last=" << grid.back()
-              << " transformed_last=" << doubled.back()
-              << " runtime_bulk_last=" << runtime_bulk.back().get()
-              << " runtime_option_bulk_last=" << runtime_option_bulk.back().get()
-              << " runtime_continued=" << runtime_continued.get()
-              << " runtime_cross_continued=" << runtime_cross_continued.get()
-              << " runtime_try=" << (runtime_try ? runtime_try->get() : -1)
-              << " runtime_try_for=" << (runtime_try_for ? runtime_try_for->get() : -1)
-              << " runtime_named=" << runtime_named_future.get()
-              << " runtime_scheduled=" << runtime_scheduled.future.get()
-              << " runtime_idle=" << runtime_idle
-              << " runtime_values_last=" << runtime_values.back()
-              << " cached=" << cached_future.get()
-              << " global=" << global_future.get()
-              << " completed=" << metrics.completed_tasks_total
-              << " workers=" << metrics.workers.size()
-              << " avg_wait_ns=" << metrics.average_wait_time_ns()
-              << " p95_wait_ns=" << metrics.wait_time_percentile_estimate_ns(0.95)
-              << " prometheus_bytes=" << prometheus.size()
+    std::cout << "普通任务结果=" << future.get()
+              << " 命名任务结果=" << named_future.get()
+              << " 执行器命名任务结果=" << executor_named_future.get()
+              << " 尝试提交结果=" << (try_future ? try_future->get() : -1)
+              << " 限时提交结果=" << (try_for_future ? try_for_future->get() : -1)
+              << " 延迟任务结果=" << scheduled_future.future.get()
+              << " 数组求和=" << sum
+              << " 并行归约结果=" << reduced
+              << " 批量任务末项=" << bulk.back().get()
+              << " 带配置批量任务末项=" << option_bulk.back().get()
+              << " 后续任务结果=" << continued.get()
+              << " 跨池后续任务结果=" << cross_pool_continued.get()
+              << " 数据流结果=" << flow.get()
+              << " 跨池数据流结果=" << cross_pool_flow.get()
+              << " 任务组结果=" << group_value.get()
+              << " 带令牌任务组结果=" << cancellable_group_value.get()
+              << " 三维循环末项=" << grid.back()
+              << " 并行转换末项=" << doubled.back()
+              << " 运行时批量末项=" << runtime_bulk.back().get()
+              << " 运行时带配置批量末项=" << runtime_option_bulk.back().get()
+              << " 运行时后续任务=" << runtime_continued.get()
+              << " 运行时跨池后续任务=" << runtime_cross_continued.get()
+              << " 运行时尝试提交=" << (runtime_try ? runtime_try->get() : -1)
+              << " 运行时限时提交=" << (runtime_try_for ? runtime_try_for->get() : -1)
+              << " 运行时命名任务=" << runtime_named_future.get()
+              << " 运行时延迟任务=" << runtime_scheduled.future.get()
+              << " 运行时是否空闲=" << runtime_idle
+              << " 运行时遍历末项=" << runtime_values.back()
+              << " 缓存模式任务结果=" << cached_future.get()
+              << " 全局线程池任务结果=" << global_future.get()
+              << " 已完成任务数=" << metrics.completed_tasks_total
+              << " 工作线程数=" << metrics.workers.size()
+              << " 平均等待时间_纳秒=" << metrics.average_wait_time_ns()
+              << " P95等待时间估计_纳秒=" << metrics.wait_time_percentile_estimate_ns(0.95)
+              << " Prometheus指标字节数=" << prometheus.size()
               << '\n';
 
     return 0;

@@ -141,6 +141,13 @@ add_executable(thread_pool_task_composition examples/task_composition.cpp)
 target_link_libraries(thread_pool_task_composition PRIVATE universal_thread_pool)
 add_test(NAME thread_pool_task_composition COMMAND thread_pool_task_composition)
 set_tests_properties(thread_pool_task_composition PROPERTIES TIMEOUT 30)
+
+if (MSVC)
+    foreach(example_target IN ITEMS thread_pool_basic thread_pool_dispatch_trace
+            thread_pool_scheduling thread_pool_task_lifecycle thread_pool_task_composition)
+        target_compile_options(${example_target} PRIVATE /utf-8)
+    endforeach()
+endif()
 endif()
 
 if (UNIVERSAL_THREAD_POOL_BUILD_BENCHMARKS)

@@ -33,11 +33,11 @@ void bounded_queues() {
     {
         thread_pool pool(options);
         pool.pause();
-        require(pool.detach([] {}), "first task must fit");
-        require(!pool.detach([] {}), "full reject queue must reject");
+        require(pool.detach([] {}), "第一个任务应成功入队");
+        require(!pool.detach([] {}), "拒绝策略下，队列满时应拒绝新任务");
         pool.resume();
-        require(pool.wait_for_idle(2s), "reject queue did not drain");
-        std::cout << "bounded_reject: second task rejected\n";
+        require(pool.wait_for_idle(2s), "拒绝策略队列未按时清空");
+        std::cout << "拒绝策略：队列已满，第二个任务被拒绝\n";
     }
 
     options.queue = queue_policy::bounded_block;
@@ -47,10 +47,10 @@ void bounded_queues() {
         auto first = pool.submit([] { return 1; });
         // A timed submission bounds the producer's wait for queue space.
         auto second = pool.try_submit_for(10ms, [] { return 2; });
-        require(!second, "full blocking queue must time out");
+        require(!second, "阻塞策略下，满队列的限时提交应超时");
         pool.resume();
-        require(first.get() == 1, "queued task result mismatch");
-        std::cout << "bounded_block: timed submission expired\n";
+        require(first.get() == 1, "排队任务返回结果不符");
+        std::cout << "阻塞策略：等待队列空位超时，本次提交结束\n";
     }
 
     options.queue = queue_policy::bounded_caller_runs;
@@ -60,10 +60,10 @@ void bounded_queues() {
         auto first = pool.submit([] { return 1; });
         const auto caller = std::this_thread::get_id();
         auto second = pool.submit([] { return std::this_thread::get_id(); });
-        require(second.get() == caller, "overflow task must run on caller");
+        require(second.get() == caller, "溢出任务应由提交线程执行");
         pool.resume();
-        require(first.get() == 1, "queued task result mismatch");
-        std::cout << "bounded_caller_runs: overflow executed on caller\n";
+        require(first.get() == 1, "排队任务返回结果不符");
+        std::cout << "调用者执行策略：溢出任务已在提交线程中执行\n";
     }
 
     options.queue = queue_policy::bounded_drop_oldest;
@@ -79,9 +79,9 @@ void bounded_queues() {
             cancelled = true;
         }
         pool.resume();
-        require(cancelled, "oldest queued task must be cancelled");
-        require(newest.get() == 2, "newest task must remain queued");
-        std::cout << "bounded_drop_oldest: newest task retained\n";
+        require(cancelled, "最旧的排队任务应被取消");
+        require(newest.get() == 2, "新任务应被保留在队列中");
+        std::cout << "丢弃最旧任务策略：旧任务已取消，新任务已保留\n";
     }
 }
 
@@ -93,32 +93,32 @@ void priority_and_pause() {
     pool.pause();
     std::vector<int> order;
     require(pool.detach_with_priority(task_priority::low, [&] { order.push_back(1); }),
-            "low priority submission failed");
+            "低优先级任务提交失败");
     require(pool.detach_with_priority(task_priority::critical, [&] { order.push_back(3); }),
-            "critical priority submission failed");
+            "紧急优先级任务提交失败");
     require(pool.detach_with_priority(task_priority::normal, [&] { order.push_back(2); }),
-            "normal priority submission failed");
-    require(order.empty(), "paused pool must leave new tasks queued");
+            "普通优先级任务提交失败");
+    require(order.empty(), "暂停期间新任务应保留在队列中");
     pool.resume();
-    require(pool.wait_for_idle(2s), "priority tasks did not finish");
-    require(order == std::vector<int>({3, 2, 1}), "priority order mismatch");
-    std::cout << "pause/resume + priority: critical, normal, low\n";
+    require(pool.wait_for_idle(2s), "优先级任务未按时完成");
+    require(order == std::vector<int>({3, 2, 1}), "优先级执行顺序不符");
+    std::cout << "暂停恢复与优先级：执行顺序为紧急、普通、低\n";
 }
 
 void resize_workers() {
     auto options = single_worker_options();
     thread_pool pool(options);
     pool.resize(3);
-    require(pool.thread_count() == 3, "pool did not grow");
+    require(pool.thread_count() == 3, "线程池未成功扩容");
     pool.resize(1);
     // Shrinking is asynchronous: workers retire after finishing current work.
     const auto deadline = std::chrono::steady_clock::now() + 2s;
     while (pool.thread_count() != 1 && std::chrono::steady_clock::now() < deadline) {
         std::this_thread::sleep_for(1ms);
     }
-    require(pool.thread_count() == 1, "pool did not shrink");
-    require(pool.submit([] { return 42; }).get() == 42, "resized pool cannot execute");
-    std::cout << "resize: 1 -> 3 -> 1 workers\n";
+    require(pool.thread_count() == 1, "线程池未成功缩容");
+    require(pool.submit([] { return 42; }).get() == 42, "调整大小后的线程池无法执行任务");
+    std::cout << "调整工作线程数：1 -> 3 -> 1\n";
 }
 
 } // namespace
@@ -129,7 +129,7 @@ int main() {
         priority_and_pause();
         resize_workers();
     } catch (const std::exception& error) {
-        std::cerr << "scheduling example failed: " << error.what() << '\n';
+        std::cerr << "调度示例失败：" << error.what() << '\n';
         return 1;
     }
 }
